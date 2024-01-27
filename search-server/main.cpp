@@ -1,7 +1,5 @@
-// Решите загадку: Сколько чисел от 1 до 1000 содержат как минимум одну цифру 3?
 // Напишите ответ здесь: 271
 
-// Закомитьте изменения и отправьте их в свой репозиторий.
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -53,7 +51,7 @@ struct Query {
 };
 
 struct Document {
-	int document_id;
+	int id;
 	double relevance;
 };
 
@@ -67,12 +65,10 @@ public:
 
 	void AddDocument(int document_id, const string& document) {
 		const vector<string> words = SplitIntoWordsNoStop(document);
+		double frequency = 1.0 / words.size();
 		for (const string& word : words) {
-			word_to_documents_[word].insert(document_id);
 			//добавляем tf
-			if (word_to_document_freqs_.count(word) == 0)
-				word_to_document_freqs_[word][document_id] = 0.0;
-			word_to_document_freqs_[word][document_id] += 1.0 / words.size();
+			word_to_document_freqs_[word][document_id] += frequency;
 		}
 		documents_count_++;
 	}
@@ -102,14 +98,17 @@ private:
 			}
 		return query_words;
 	}
-
+	double ComputeIDF(const string& word) const {
+		double idf = log(static_cast<double>(documents_count_) / word_to_document_freqs_.at(word).size());
+		return idf;
+	}
 	vector<Document> FindAllDocuments(const Query& query_words) const {
 		double idf = 0;
 		map<int, double> document_to_relevance;
 		for (const string& word : query_words.plus_words) {
 			if (word_to_document_freqs_.count(word) != 0) {
 
-				idf = log(static_cast<double>(documents_count_) / word_to_document_freqs_.at(word).size());
+				idf = ComputeIDF(word);
 				for (const auto& [document_id, tf] : word_to_document_freqs_.at(word)) {
 					document_to_relevance[document_id] += tf * idf;
 				}
