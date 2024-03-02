@@ -80,19 +80,8 @@ enum class DocumentStatus {
 
 class SearchServer {
 public:
-    inline static constexpr int INVALID_DOCUMENT_ID = -1;
 
-     bool HasNoSpecificSymbols(const string& word) const
-    {
-        for (const char c : word)
-        {
-            if (0 <= (int)c && (int)c <= 31)
-                return false;
-        }
-        return true;
-    }
-
-    template <typename StringContainer>
+       template <typename StringContainer>
     explicit SearchServer(const StringContainer& stop_words)
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
         for (const auto& stop_word : stop_words_)
@@ -106,27 +95,28 @@ public:
         : SearchServer(
             SplitIntoWords(stop_words_text))  // Invoke delegating constructor from string container
     {
-        for (const auto& stop_word : stop_words_)
-        {
-            if (!HasNoSpecificSymbols(stop_word))
-                throw invalid_argument("Stop words must not include specific symbols!"s);
-        }
     }
 
     int GetDocumentId(int index) const {
         if (index >= 0 && index < GetDocumentCount())
             return documents_id_by_order_.at(index);
-        else throw out_of_range("Id must not have any specific symbols!"s);
+        else {
+            throw out_of_range("Id must not have any specific symbols!"s);
+        }
     }
 
     [[nodiscard]] bool AddDocument(int document_id, const string& document, DocumentStatus status,
         const vector<int>& ratings) {
 
         if (document_id < 0)
+        {
             throw invalid_argument("Document id must be positive!"s);
+        }
 
         if (documents_.count(document_id))
+        {
             throw invalid_argument("Document id must be unique!"s);
+        }
 
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / words.size();
@@ -137,7 +127,9 @@ public:
                 documents_id_by_order_[GetDocumentCount()] = document_id;
             }
             else
+            {
                 throw invalid_argument("Document must not include specific symbols!"s);
+            }
         }
         documents_.emplace(document_id, DocumentData{ ComputeAverageRating(ratings), status });
         return true;
@@ -146,20 +138,7 @@ public:
     template <typename DocumentPredicate>
     [[nodiscard]] vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const {
         const Query query = ParseQuery(raw_query);
-        for (auto& q : query.plus_words)
-        {
-            if (q.size() == 0 || q[0] == '-' || q[q.size() - 1] == '-')
-                throw invalid_argument("Minus in word!"s);
-            if (!HasNoSpecificSymbols(q))
-                throw invalid_argument("Specific symbols!"s);
-        }
-        for (auto& q : query.minus_words)
-        {
-            if (q.size() == 0 || q[0] == '-' || q[q.size() - 1] == '-')
-                throw invalid_argument("Minus in word!"s);
-            if (!HasNoSpecificSymbols(q))
-                throw invalid_argument("Specific symbols!"s);
-        }
+        
         vector<Document> result = FindAllDocuments(query, document_predicate);
 
         sort(result.begin(), result.end(),
@@ -194,28 +173,11 @@ public:
 
     [[nodiscard]] tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
         const Query query = ParseQuery(raw_query);
-        for (auto& q : query.plus_words)
-        {
-            if (q.size() == 0 || q[0] == '-' || q[q.size() - 1] == '-')
-                throw invalid_argument("Minus in word!"s);
-            if (!HasNoSpecificSymbols(q))
-                throw invalid_argument("Specific symbols!"s);
-        }
-        for (auto& q : query.minus_words)
-        {
-            if (q.size() == 0 || q[0] == '-' || q[q.size() - 1] == '-')
-                throw invalid_argument("Minus in word!"s);
-            if (!HasNoSpecificSymbols(q))
-                throw invalid_argument("Specific symbols!"s);
-        }
+        
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
-            }
-            if (!HasNoSpecificSymbols(word))
-            {
-                throw invalid_argument("Specific symbols!"s);
             }
 
             if (word_to_document_freqs_.at(word).count(document_id)) {
@@ -225,10 +187,6 @@ public:
         for (const string& word : query.minus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
-            }
-            if (!HasNoSpecificSymbols(word))
-            {
-                throw invalid_argument("Specific symbols!"s);
             }
             if (word_to_document_freqs_.at(word).count(document_id)) {
                 matched_words.clear();
@@ -241,7 +199,6 @@ public:
 
     }
 
-
 private:
     struct DocumentData {
         int rating;
@@ -250,10 +207,20 @@ private:
     const set<string> stop_words_;
     map<string, map<int, double>> word_to_document_freqs_;
     map<int, DocumentData> documents_;
-    map<int, int> documents_id_by_order_;
+    vector<int> documents_id_by_order_;
 
     bool IsStopWord(const string& word) const {
         return stop_words_.count(word) > 0;
+    }
+
+    bool HasNoSpecificSymbols(const string& word) const
+    {
+        for (const char c : word)
+        {
+            if (0 <= (int)c && (int)c <= 31)
+                return false;
+        }
+        return true;
     }
 
     vector<string> SplitIntoWordsNoStop(const string& text) const {
@@ -286,9 +253,16 @@ private:
     QueryWord ParseQueryWord(string text) const {
         bool is_minus = false;
         // Word shouldn't be empty
-        if (text[0] == '-') {
+        if(!HasNoSpecificSymbols(text))
+            throw invalid_argument("Specific symbols!"s);
+
+
+        if (text[0] == '-' && text[text.size() - 1] != '-') {
             is_minus = true;
             text = text.substr(1);
+        }
+        else {
+            throw invalid_argument("Specific symbols!"s);
         }
         return { text, is_minus, IsStopWord(text) };
     }
